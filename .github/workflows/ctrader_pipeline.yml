@@ -1,0 +1,122 @@
+name: RAKU cTrader pipeline (public trigger)
+
+# 2026-09-17 — este repo es publico A PROPOSITO y no contiene ninguna logica
+# de estrategia (ver README.md). GitHub degrada la prioridad de los workflows
+# PROGRAMADOS en repos privados (raku-shadow-resolver corria cada 2-5h en vez
+# de cada 15 min pese a estar consolidado en un solo workflow) -- un repo
+# publico no tiene ese limite. Cada corrida clona el repo PRIVADO
+# (raku-shadow-resolver, con toda la logica real) usando un token de solo
+# ese proposito, corre todo desde ahi, y empuja los resultados de vuelta.
+#
+# Se dejo fuera detect_signals.py (deteccion nativa a 0.618): comparaba
+# contra el baseline de produccion de TradingView, que ya no corre (alertas
+# apagadas 2026-09-17, foco 100% en cTrader/0.786).
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: raku-ctrader-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Clonar el repo privado con la estrategia
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: git clone https://x-access-token:${GH_PAT}@github.com/MahkrketGroup/raku-shadow-resolver.git strategy
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        working-directory: strategy
+        run: pip install -r requirements-check.txt
+
+      - name: Escribir .env desde secretos
+        working-directory: strategy
+        run: |
+          cat > .env << 'EOF'
+          CTRADER_CLIENT_ID=${{ secrets.CTRADER_CLIENT_ID }}
+          CTRADER_CLIENT_SECRET=${{ secrets.CTRADER_CLIENT_SECRET }}
+          CTRADER_REDIRECT_URI=${{ secrets.CTRADER_REDIRECT_URI }}
+          CTRADER_ENV=${{ secrets.CTRADER_ENV }}
+          CTRADER_ACCESS_TOKEN=${{ secrets.CTRADER_ACCESS_TOKEN }}
+          CTRADER_REFRESH_TOKEN=${{ secrets.CTRADER_REFRESH_TOKEN }}
+          CTRADER_ACCOUNT_ID=${{ secrets.CTRADER_ACCOUNT_ID }}
+          EOF
+
+      - name: Resolver shadow outcomes (TradingView) + refresco de token
+        continue-on-error: true
+        working-directory: strategy
+        run: python3 -u resolve_shadow_outcomes.py
+
+      - name: Detector nativo 0.786 (solo registro)
+        continue-on-error: true
+        working-directory: strategy
+        run: PYTHONPATH=. python3 -u detect_signals_786.py
+
+      - name: Resolver de la variante 786 (solo registro)
+        continue-on-error: true
+        working-directory: strategy
+        run: PYTHONPATH=. python3 -u resolve_entry_786_outcomes.py
+
+      - name: Detector + ejecutor demo (entry 786)
+        continue-on-error: true
+        working-directory: strategy
+        run: PYTHONPATH=. python3 -u ctrader_entry786_demo_execute.py
+
+      - name: Resolver outcomes demo (entry 786)
+        continue-on-error: true
+        working-directory: strategy
+        run: PYTHONPATH=. python3 -u resolve_entry786_demo_outcomes.py
+
+      - name: Persistir tokens rotados
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          NEW_ACCESS=$(grep -E '^CTRADER_ACCESS_TOKEN=' strategy/.env | cut -d= -f2-)
+          NEW_REFRESH=$(grep -E '^CTRADER_REFRESH_TOKEN=' strategy/.env | cut -d= -f2-)
+          if [ -n "$NEW_ACCESS" ] && [ "$NEW_ACCESS" != "${{ secrets.CTRADER_ACCESS_TOKEN }}" ]; then
+            echo "$NEW_ACCESS" | gh secret set CTRADER_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY"
+            echo "Access token rotado y guardado."
+          fi
+          if [ -n "$NEW_REFRESH" ] && [ "$NEW_REFRESH" != "${{ secrets.CTRADER_REFRESH_TOKEN }}" ]; then
+            echo "$NEW_REFRESH" | gh secret set CTRADER_REFRESH_TOKEN --repo "$GITHUB_REPOSITORY"
+            echo "Refresh token rotado y guardado."
+          fi
+
+      - name: Limpiar .env
+        if: always()
+        run: rm -f strategy/.env
+
+      - name: Commit ledgers en el repo privado
+        if: always()
+        working-directory: strategy
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          git config user.name "raku-cron"
+          git config user.email "noreply@mahrketgroup.com"
+          git add data/shadow/entry_786_signals.jsonl data/demo_786/ 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "cTrader pipeline: señales / resoluciones / ejecuciones"
+          git push https://x-access-token:${GH_PAT}@github.com/MahkrketGroup/raku-shadow-resolver.git main || true
+
+      - name: Empujar ledger demo al panel (Hostinger)
+        if: always()
+        working-directory: strategy
+        run: |
+          if [ -f data/demo_786/live-shadow.json ]; then
+            curl -s -X POST "https://mahrketgroup.com/tradingbot/panel/api/push_demo786.php" \
+              -H "X-Shadow-Token: 9a9308ffdb7c93a7efe9d7bd1bf61c55fa23658057b4b372" \
+              -H "Content-Type: application/json" \
+              --data-binary @data/demo_786/live-shadow.json \
+              -w "\n panel respondio %{http_code}\n" || true
+          fi
