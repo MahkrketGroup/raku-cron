@@ -89,35 +89,31 @@ jobs:
       # ledger aislado (nunca data/shadow/entry_786_signals.jsonl ni
       # data/demo_786/).
       #
-      # PAUSADO (if: false) el mismo dia del despliegue -- justo despues de
-      # activarlo el token de cTrader empezo a fallar (ACCESS_DENIED al
-      # refrescar, INVALID_REQUEST en TODOS los detectores, H1 incluido) en
-      # la misma corrida que duplico las conexiones por ciclo (21->42, cada
-      # detector abre una conexion nueva por instrumento). Sospecha: un
-      # limite de sesion/rate-limit de cTrader. Se pausa para bajar la carga
-      # a la mitad y confirmar si el token se recupera solo -- si es asi,
-      # hay que rediseñar el fetch de M5 para reusar una sola conexion en
-      # vez de 21, antes de reactivar estos 4 pasos.
+      # 2026-09-21 -- reactivado tras el fix de conexion unica (ver
+      # detect_signals_786_m5.py:fetch_all). El incidente del mismo dia:
+      # duplicar conexiones cTrader por corrida (21->42, una conexion nueva
+      # por instrumento) invalido el token compartido con H1 a mitad de
+      # sesion (ACCESS_DENIED / INVALID_REQUEST en TODO el pipeline). Los 3
+      # scripts de abajo que hacian fetch de velas ahora abren 1 sola
+      # conexion para los 21 instrumentos (o las N señales pendientes), no
+      # 21 -- la carga total del pipeline vuelve a ser ~la misma que antes
+      # de sumar M5.
       - name: Detector nativo 0.786 M5 (solo registro)
-        if: false
         continue-on-error: true
         working-directory: strategy
         run: PYTHONPATH=. python3 -u detect_signals_786_m5.py
 
       - name: Resolver de la variante 786 M5 (solo registro)
-        if: false
         continue-on-error: true
         working-directory: strategy
         run: PYTHONPATH=. python3 -u resolve_entry_786_m5_outcomes.py
 
       - name: Detector + ejecutor demo M5 (entry 786)
-        if: false
         continue-on-error: true
         working-directory: strategy
         run: PYTHONPATH=. python3 -u ctrader_entry786_m5_demo_execute.py
 
       - name: Resolver outcomes demo M5 (entry 786)
-        if: false
         continue-on-error: true
         working-directory: strategy
         run: PYTHONPATH=. python3 -u resolve_entry786_m5_demo_outcomes.py
@@ -177,9 +173,6 @@ jobs:
               --data-binary @data/demo_786/live-shadow.json \
               -w "\n panel respondio %{http_code}\n" || true
           fi
-          # M5 pausado junto con sus 4 pasos de arriba (ver "if: false") --
-          # sin corridas de M5 no hay live-shadow.json nuevo que empujar,
-          # este bloque simplemente no encuentra el archivo y no hace nada.
           if [ -f data/demo_786_m5/live-shadow.json ]; then
             curl -s -X POST "https://mahrketgroup.com/tradingbot/panel/api/push_demo786_m5.php" \
               -H "X-Shadow-Token: 9a9308ffdb7c93a7efe9d7bd1bf61c55fa23658057b4b372" \
