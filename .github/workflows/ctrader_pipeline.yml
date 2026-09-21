@@ -11,6 +11,13 @@ name: RAKU cTrader pipeline (public trigger)
 # Se dejo fuera detect_signals.py (deteccion nativa a 0.618): comparaba
 # contra el baseline de produccion de TradingView, que ya no corre (alertas
 # apagadas 2026-09-17, foco 100% en cTrader/0.786).
+#
+# 2026-09-21 -- se agrega el pipeline M5 (contexto M15 / entrada M5, filtro
+# propio validado con backtest + walk-forward, ver detect_signals_786_m5.py)
+# en paralelo al de H1. Ledger COMPLETAMENTE AISLADO (data/shadow/entry_786_m5_signals.jsonl,
+# data/demo_786_m5/) -- nunca compite por riesgo ni se mezcla con el de H1.
+# Arranca con el cron actual de 15 min; se acorta solo si en la practica se
+# ve que hace falta mas velocidad de ejecucion.
 
 on:
   schedule:
@@ -77,6 +84,30 @@ jobs:
         working-directory: strategy
         run: PYTHONPATH=. python3 -u resolve_entry786_demo_outcomes.py
 
+      # 2026-09-21 -- pipeline paralelo M5 (M15 contexto / M5 entrada), mismo
+      # patron de 4 pasos que arriba pero con su propio filtro y su propio
+      # ledger aislado (nunca data/shadow/entry_786_signals.jsonl ni
+      # data/demo_786/).
+      - name: Detector nativo 0.786 M5 (solo registro)
+        continue-on-error: true
+        working-directory: strategy
+        run: PYTHONPATH=. python3 -u detect_signals_786_m5.py
+
+      - name: Resolver de la variante 786 M5 (solo registro)
+        continue-on-error: true
+        working-directory: strategy
+        run: PYTHONPATH=. python3 -u resolve_entry_786_m5_outcomes.py
+
+      - name: Detector + ejecutor demo M5 (entry 786)
+        continue-on-error: true
+        working-directory: strategy
+        run: PYTHONPATH=. python3 -u ctrader_entry786_m5_demo_execute.py
+
+      - name: Resolver outcomes demo M5 (entry 786)
+        continue-on-error: true
+        working-directory: strategy
+        run: PYTHONPATH=. python3 -u resolve_entry786_m5_demo_outcomes.py
+
       # 2026-09-21 -- antes corria SOLO local via launchd con credenciales
       # que quedaron muertas cuando raku-cron tomo la rotacion de tokens
       # (ver hallazgo del mismo dia). Migrado aqui para usar el token
@@ -117,7 +148,7 @@ jobs:
         run: |
           git config user.name "raku-cron"
           git config user.email "noreply@mahrketgroup.com"
-          git add data/shadow/entry_786_signals.jsonl data/demo_786/ 2>/dev/null || true
+          git add data/shadow/entry_786_signals.jsonl data/shadow/entry_786_m5_signals.jsonl data/demo_786/ data/demo_786_m5/ 2>/dev/null || true
           git diff --cached --quiet || git commit -m "cTrader pipeline: señales / resoluciones / ejecuciones"
           git push https://x-access-token:${GH_PAT}@github.com/MahkrketGroup/raku-shadow-resolver.git main || true
 
@@ -131,4 +162,11 @@ jobs:
               -H "Content-Type: application/json" \
               --data-binary @data/demo_786/live-shadow.json \
               -w "\n panel respondio %{http_code}\n" || true
+          fi
+          if [ -f data/demo_786_m5/live-shadow.json ]; then
+            curl -s -X POST "https://mahrketgroup.com/tradingbot/panel/api/push_demo786_m5.php" \
+              -H "X-Shadow-Token: 9a9308ffdb7c93a7efe9d7bd1bf61c55fa23658057b4b372" \
+              -H "Content-Type: application/json" \
+              --data-binary @data/demo_786_m5/live-shadow.json \
+              -w "\n panel M5 respondio %{http_code}\n" || true
           fi
