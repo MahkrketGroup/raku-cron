@@ -77,6 +77,18 @@ jobs:
         working-directory: strategy
         run: PYTHONPATH=. python3 -u resolve_entry786_demo_outcomes.py
 
+      # 2026-09-21 -- antes corria SOLO local via launchd con credenciales
+      # que quedaron muertas cuando raku-cron tomo la rotacion de tokens
+      # (ver hallazgo del mismo dia). Migrado aqui para usar el token
+      # siempre fresco del paso de arriba. Idempotente y auto-limitado a la
+      # ventana de viernes (ver src/layer3_execution/friday_flatten.py) --
+      # en cualquier otro momento de la semana no hace nada, seguro de dejar
+      # correr cada 15 min sin filtro de horario en el workflow.
+      - name: Aplanado de viernes (cierra posiciones reales antes del gap de fin de semana)
+        continue-on-error: true
+        working-directory: strategy
+        run: PYTHONPATH=. python3 -u friday_flatten_positions.py
+
       - name: Persistir tokens rotados
         if: always()
         env:
