@@ -64,6 +64,18 @@ jobs:
         working-directory: strategy
         run: python3 -u resolve_shadow_outcomes.py
 
+      # 2026-09-22 -- antes corria SOLO local via launchd (agente
+      # "positionsmonitor", eliminado el mismo dia que se migro todo lo demas
+      # a este pipeline por credenciales locales muertas). Esta pieza quedo
+      # huerfana en esa migracion: el panel mostro un snapshot de posiciones
+      # de mas de un mes (2026-08-07) sin que nadie lo notara hasta que el
+      # dueño lo vio en el dashboard. Corre justo despues del refresco de
+      # token para usar siempre el mas fresco del ciclo.
+      - name: Empujar posiciones abiertas al panel (solo lectura)
+        continue-on-error: true
+        working-directory: strategy
+        run: python3 -u push_ctrader_positions.py
+
       - name: Detector nativo 0.786 (solo registro)
         continue-on-error: true
         working-directory: strategy
