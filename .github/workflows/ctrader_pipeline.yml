@@ -179,14 +179,14 @@ jobs:
         working-directory: strategy
         run: |
           if [ -f data/demo_786/live-shadow.json ]; then
-            curl -s -X POST "https://mahrketgroup.com/tradingbot/panel/api/push_demo786.php" \
+            curl -s -X POST "https://tradingbot.mahrketgroup.com/tradingbot/panel/api/push_demo786.php" \
               -H "X-Shadow-Token: 9a9308ffdb7c93a7efe9d7bd1bf61c55fa23658057b4b372" \
               -H "Content-Type: application/json" \
               --data-binary @data/demo_786/live-shadow.json \
               -w "\n panel respondio %{http_code}\n" || true
           fi
           if [ -f data/demo_786_m5/live-shadow.json ]; then
-            curl -s -X POST "https://mahrketgroup.com/tradingbot/panel/api/push_demo786_m5.php" \
+            curl -s -X POST "https://tradingbot.mahrketgroup.com/tradingbot/panel/api/push_demo786_m5.php" \
               -H "X-Shadow-Token: 9a9308ffdb7c93a7efe9d7bd1bf61c55fa23658057b4b372" \
               -H "Content-Type: application/json" \
               --data-binary @data/demo_786_m5/live-shadow.json \
