@@ -170,7 +170,7 @@ jobs:
         run: |
           git config user.name "raku-cron"
           git config user.email "noreply@mahrketgroup.com"
-          git add data/shadow/entry_786_signals.jsonl data/shadow/entry_786_m5_signals.jsonl data/demo_786/ data/demo_786_m5/ 2>/dev/null || true
+          git add data/shadow/entry_786_signals.jsonl data/shadow/entry_786_m5_signals.jsonl data/demo_786/ data/demo_786_m5/ data/token_meta.json 2>/dev/null || true
           git diff --cached --quiet || git commit -m "cTrader pipeline: señales / resoluciones / ejecuciones"
           git push https://x-access-token:${GH_PAT}@github.com/MahkrketGroup/raku-shadow-resolver.git main || true
 
