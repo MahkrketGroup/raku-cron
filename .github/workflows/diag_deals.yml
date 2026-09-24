@@ -1,0 +1,89 @@
+name: Diagnostico de deals (solo lectura, manual)
+
+# 2026-09-24 -- one-off: lee los deals reales de cTrader de posiciones ya
+# cerradas para verificar el calculo de net_profit (signo de la comision).
+# Solo lectura, no rota tokens, no escribe nada, no comparte el grupo de
+# concurrencia del pipeline. Se puede borrar despues de usarlo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      position_ids:
+        description: "IDs de posicion separados por coma"
+        required: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Clonar el repo privado
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: git clone https://x-access-token:${GH_PAT}@github.com/MahkrketGroup/raku-shadow-resolver.git strategy
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        working-directory: strategy
+        run: pip install -r requirements-check.txt
+
+      - name: Escribir .env desde secretos
+        working-directory: strategy
+        run: |
+          cat > .env << 'ENVEOF'
+          CTRADER_CLIENT_ID=${{ secrets.CTRADER_CLIENT_ID }}
+          CTRADER_CLIENT_SECRET=${{ secrets.CTRADER_CLIENT_SECRET }}
+          CTRADER_ENV=${{ secrets.CTRADER_ENV }}
+          CTRADER_ACCESS_TOKEN=${{ secrets.CTRADER_ACCESS_TOKEN }}
+          CTRADER_ACCOUNT_ID=${{ secrets.CTRADER_ACCOUNT_ID }}
+          ENVEOF
+
+      - name: Leer deals
+        working-directory: strategy
+        env:
+          POSITION_IDS: ${{ github.event.inputs.position_ids }}
+        run: |
+          PYTHONPATH=. python3 - << 'PYEOF'
+          import json, os, sys
+          from datetime import datetime, timedelta, timezone
+          from dotenv import load_dotenv
+          load_dotenv(".env")
+          from src.layer3_execution.ctrader_client import CTraderExecutionClient
+          from ctrader_open_api import Protobuf
+          from ctrader_open_api.messages.OpenApiMessages_pb2 import (
+              ProtoOADealListByPositionIdReq, ProtoOADealListByPositionIdRes)
+          from google.protobuf.json_format import MessageToDict
+
+          ex = CTraderExecutionClient(
+              client_id=os.environ["CTRADER_CLIENT_ID"], client_secret=os.environ["CTRADER_CLIENT_SECRET"],
+              access_token=os.environ["CTRADER_ACCESS_TOKEN"], account_id=int(os.environ["CTRADER_ACCOUNT_ID"]),
+              environment=os.environ.get("CTRADER_ENV", "demo"))
+          now = datetime.now(timezone.utc)
+
+          def fetch(pid):
+              def on_ready(client, finish):
+                  def on_deals(resp):
+                      data = Protobuf.extract(resp)
+                      if resp.payloadType != ProtoOADealListByPositionIdRes().payloadType:
+                          finish(RuntimeError(str(getattr(data, "errorCode", "error"))))
+                          return
+                      finish([MessageToDict(d) for d in data.deal])
+                  d = client.send(ProtoOADealListByPositionIdReq(
+                      ctidTraderAccountId=ex.account_id, positionId=int(pid),
+                      fromTimestamp=int((now - timedelta(days=30)).timestamp() * 1000),
+                      toTimestamp=int(now.timestamp() * 1000)))
+                  d.addCallbacks(on_deals, lambda f: finish(RuntimeError(str(f))))
+              return ex._run_blocking(on_ready, timeout=25.0)
+
+          for pid in os.environ["POSITION_IDS"].split(","):
+              res = fetch(pid.strip())
+              print("=== POSICION", pid.strip(), "===")
+              print(json.dumps(res, indent=1, default=str) if not isinstance(res, Exception) else f"ERROR: {res}")
+          PYEOF
+
+      - name: Limpiar .env
+        if: always()
+        run: rm -f strategy/.env
