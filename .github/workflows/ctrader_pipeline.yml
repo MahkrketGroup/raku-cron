@@ -76,6 +76,13 @@ jobs:
         working-directory: strategy
         run: python3 -u push_ctrader_positions.py
 
+      # 2026-09-25 -- detector + ejecutor CAUSAL (D1/4H, D1/1H, H4/1H, zona 0.886, trailing).
+      # Reconstruye todo cada ciclo desde velas H1 del broker + estado del broker.
+      - name: Causal live (demo)
+        continue-on-error: true
+        working-directory: strategy
+        run: PYTHONPATH=. python3 -u causal_live.py
+
       - name: Detector nativo 0.786 (solo registro)
         continue-on-error: true
         working-directory: strategy
@@ -86,10 +93,12 @@ jobs:
         working-directory: strategy
         run: PYTHONPATH=. python3 -u resolve_entry_786_outcomes.py
 
-      - name: Detector + ejecutor demo (entry 786)
-        continue-on-error: true
-        working-directory: strategy
-        run: PYTHONPATH=. python3 -u ctrader_entry786_demo_execute.py
+      # PAUSADO 2026-09-25: backtest con informacion futura (pico de las 40 velas
+      # siguientes) + deteccion 4-6 h tarde. Reemplazado por causal_live.py. Ver BRIEF.md.
+      # - name: Detector + ejecutor demo (entry 786)
+      #   continue-on-error: true
+      #   working-directory: strategy
+      #   run: PYTHONPATH=. python3 -u ctrader_entry786_demo_execute.py
 
       - name: Resolver outcomes demo (entry 786)
         continue-on-error: true
@@ -120,10 +129,12 @@ jobs:
         working-directory: strategy
         run: PYTHONPATH=. python3 -u resolve_entry_786_m5_outcomes.py
 
-      - name: Detector + ejecutor demo M5 (entry 786)
-        continue-on-error: true
-        working-directory: strategy
-        run: PYTHONPATH=. python3 -u ctrader_entry786_m5_demo_execute.py
+      # PAUSADO 2026-09-25: backtest con informacion futura (pico de las 40 velas
+      # siguientes) + deteccion 4-6 h tarde. Reemplazado por causal_live.py. Ver BRIEF.md.
+      # - name: Detector + ejecutor demo M5 (entry 786)
+      #   continue-on-error: true
+      #   working-directory: strategy
+      #   run: PYTHONPATH=. python3 -u ctrader_entry786_m5_demo_execute.py
 
       - name: Resolver outcomes demo M5 (entry 786)
         continue-on-error: true
@@ -170,7 +181,7 @@ jobs:
         run: |
           git config user.name "raku-cron"
           git config user.email "noreply@mahrketgroup.com"
-          git add data/shadow/entry_786_signals.jsonl data/shadow/entry_786_m5_signals.jsonl data/demo_786/ data/demo_786_m5/ data/token_meta.json 2>/dev/null || true
+          git add data/shadow/entry_786_signals.jsonl data/shadow/entry_786_m5_signals.jsonl data/demo_786/ data/demo_786_m5/ data/causal_live/ data/token_meta.json 2>/dev/null || true
           git diff --cached --quiet || git commit -m "cTrader pipeline: señales / resoluciones / ejecuciones"
           git push https://x-access-token:${GH_PAT}@github.com/MahkrketGroup/raku-shadow-resolver.git main || true
 
