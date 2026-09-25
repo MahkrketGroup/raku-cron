@@ -83,15 +83,19 @@ jobs:
         working-directory: strategy
         run: PYTHONPATH=. python3 -u causal_live.py
 
-      - name: Detector nativo 0.786 (solo registro)
-        continue-on-error: true
-        working-directory: strategy
-        run: PYTHONPATH=. python3 -u detect_signals_786.py
+      # PAUSADO 2026-09-25 (solo registro de la estrategia pausada; ahorra ~5 min por ciclo
+      # y acelera la colocacion de ordenes causales).
+      # - name: Detector nativo 0.786 (solo registro)
+      #   continue-on-error: true
+      #   working-directory: strategy
+      #   run: PYTHONPATH=. python3 -u detect_signals_786.py
 
-      - name: Resolver de la variante 786 (solo registro)
-        continue-on-error: true
-        working-directory: strategy
-        run: PYTHONPATH=. python3 -u resolve_entry_786_outcomes.py
+      # PAUSADO 2026-09-25 (solo registro de la estrategia pausada; ahorra ~5 min por ciclo
+      # y acelera la colocacion de ordenes causales).
+      # - name: Resolver de la variante 786 (solo registro)
+      #   continue-on-error: true
+      #   working-directory: strategy
+      #   run: PYTHONPATH=. python3 -u resolve_entry_786_outcomes.py
 
       # PAUSADO 2026-09-25: backtest con informacion futura (pico de las 40 velas
       # siguientes) + deteccion 4-6 h tarde. Reemplazado por causal_live.py. Ver BRIEF.md.
@@ -119,15 +123,19 @@ jobs:
       # conexion para los 21 instrumentos (o las N señales pendientes), no
       # 21 -- la carga total del pipeline vuelve a ser ~la misma que antes
       # de sumar M5.
-      - name: Detector nativo 0.786 M5 (solo registro)
-        continue-on-error: true
-        working-directory: strategy
-        run: PYTHONPATH=. python3 -u detect_signals_786_m5.py
+      # PAUSADO 2026-09-25 (solo registro de la estrategia pausada; ahorra ~5 min por ciclo
+      # y acelera la colocacion de ordenes causales).
+      # - name: Detector nativo 0.786 M5 (solo registro)
+      #   continue-on-error: true
+      #   working-directory: strategy
+      #   run: PYTHONPATH=. python3 -u detect_signals_786_m5.py
 
-      - name: Resolver de la variante 786 M5 (solo registro)
-        continue-on-error: true
-        working-directory: strategy
-        run: PYTHONPATH=. python3 -u resolve_entry_786_m5_outcomes.py
+      # PAUSADO 2026-09-25 (solo registro de la estrategia pausada; ahorra ~5 min por ciclo
+      # y acelera la colocacion de ordenes causales).
+      # - name: Resolver de la variante 786 M5 (solo registro)
+      #   continue-on-error: true
+      #   working-directory: strategy
+      #   run: PYTHONPATH=. python3 -u resolve_entry_786_m5_outcomes.py
 
       # PAUSADO 2026-09-25: backtest con informacion futura (pico de las 40 velas
       # siguientes) + deteccion 4-6 h tarde. Reemplazado por causal_live.py. Ver BRIEF.md.
