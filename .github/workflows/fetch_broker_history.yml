@@ -1,0 +1,58 @@
+name: Fetch broker history (read-only)
+
+# 2026-10-10 -- descarga de SOLO LECTURA de velas M5 del broker (IC Markets, cuenta demo) para la
+# prueba de robustez del laboratorio. No coloca ni modifica nada en la cuenta, no refresca el token
+# y no toca el pipeline. Las velas son datos de mercado (no hay datos de la cuenta en el artefacto).
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "Fecha inicial YYYY-MM-DD"
+        required: false
+        default: "2018-01-01"
+      symbols:
+        description: "Simbolos separados por coma"
+        required: true
+
+concurrency:
+  group: fetch-history-${{ github.event.inputs.symbols }}
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Clonar el repo privado (solo el script de descarga)
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: git clone --depth 1 https://x-access-token:${GH_PAT}@github.com/MahkrketGroup/raku-shadow-resolver.git strategy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias
+        working-directory: strategy
+        run: pip install -r requirements-check.txt
+      - name: Escribir .env desde secretos
+        working-directory: strategy
+        run: |
+          cat > .env << 'EOT'
+          CTRADER_CLIENT_ID=${{ secrets.CTRADER_CLIENT_ID }}
+          CTRADER_CLIENT_SECRET=${{ secrets.CTRADER_CLIENT_SECRET }}
+          CTRADER_ENV=${{ secrets.CTRADER_ENV }}
+          CTRADER_ACCESS_TOKEN=${{ secrets.CTRADER_ACCESS_TOKEN }}
+          CTRADER_ACCOUNT_ID=${{ secrets.CTRADER_ACCOUNT_ID }}
+          EOT
+      - name: Descargar M5
+        working-directory: strategy
+        run: python3 -u fetch_m5_recent.py --start "${{ github.event.inputs.start }}" --symbols "${{ github.event.inputs.symbols }}"
+      - name: Borrar .env
+        if: always()
+        working-directory: strategy
+        run: rm -f .env
+      - uses: actions/upload-artifact@v4
+        with:
+          name: broker_m5_${{ github.run_id }}
+          path: strategy/out_m5/
+          retention-days: 3
